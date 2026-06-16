@@ -31,7 +31,11 @@ userSchema.pre('save', function stamp(next) {
 
 userSchema.index(
   { registrationEmail: 1 },
-  { unique: true, sparse: true, collation: { locale: 'en', strength: 2 } },
+  {
+    unique: true,
+    partialFilterExpression: { registrationEmail: { $type: 'string' } },
+    collation: { locale: 'en', strength: 2 }
+  }
 );
 
 module.exports = mongoose.model('User', userSchema);

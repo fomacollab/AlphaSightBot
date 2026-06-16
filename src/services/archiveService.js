@@ -3,32 +3,20 @@ const { ASSET_DEFINITIONS, SETTINGS_KEYS } = require('../constants/app');
 const { getSetting } = require('./settingsService');
 const { enqueue, withRetry, isSkippableTelegramError } = require('./queue');
 
-async function ensureAssetDefinitions() {
-  for (const item of ASSET_DEFINITIONS) {
-    const existing = await MediaAsset.findOne({ key: item.key });
-    if (!existing) {
-      await MediaAsset.create(item);
-      continue;
-    }
+const assetDefinitionMap = new Map(ASSET_DEFINITIONS.map((item) => [item.key, item]));
 
-    let changed = false;
-    if (existing.group !== item.group) {
-      existing.group = item.group;
-      changed = true;
-    }
-    if (existing.label !== item.label) {
-      existing.label = item.label;
-      changed = true;
-    }
-    if (existing.kind !== item.kind) {
-      existing.kind = item.kind;
-      changed = true;
-    }
-    if (changed) {
-      existing.updatedAt = new Date();
-      await existing.save();
-    }
+function getAssetDefinition(key) {
+  return assetDefinitionMap.get(key) || null;
+}
+
+async function getAssetByKey(key) {
+  const stored = await MediaAsset.findOne({ key }).lean();
+  if (stored) {
+    const fallback = getAssetDefinition(key);
+    return { ...fallback, ...stored };
   }
+  const fallback = getAssetDefinition(key);
+  return fallback ? { ...fallback } : null;
 }
 
 function extractMessageFile(message) {
@@ -80,8 +68,12 @@ async function archiveAssetFromMessage(bot, ctx, assetKey) {
     throw new Error('Archive channel is not set. Use the admin panel first.');
   }
 
-  const existing = await MediaAsset.findOne({ key: assetKey });
-  if (!existing) throw new Error(`Unknown asset key: ${assetKey}`);
+  let existing = await MediaAsset.findOne({ key: assetKey });
+  if (!existing) {
+    const fallback = getAssetDefinition(assetKey);
+    if (!fallback) throw new Error(`Unknown asset key: ${assetKey}`);
+    existing = await MediaAsset.create(fallback);
+  }
 
   const fileMeta = extractMessageFile(ctx.message);
   if (!fileMeta) throw new Error(`Please send ${describeExpectedMedia(existing.kind)}.`);
@@ -111,7 +103,7 @@ async function archiveAssetFromMessage(bot, ctx, assetKey) {
 }
 
 async function sendAsset(bot, chatId, assetKey) {
-  const asset = await MediaAsset.findOne({ key: assetKey }).lean();
+  const asset = await getAssetByKey(assetKey);
   if (!asset?.archiveChannelId || !asset?.archiveMessageId) return false;
 
   try {
@@ -126,7 +118,26 @@ async function sendAsset(bot, chatId, assetKey) {
 }
 
 async function getAssetsByGroup(group) {
-  return MediaAsset.find({ group }).sort({ label: 1 }).lean();
+  const stored = await MediaAsset.find(group ? { group } : {}).sort({ label: 1 }).lean();
+  const merged = new Map();
+
+  for (const item of ASSET_DEFINITIONS) {
+    if (!group || item.group === group) merged.set(item.key, { ...item });
+  }
+
+  for (const item of stored) {
+    const fallback = merged.get(item.key) || {};
+    merged.set(item.key, { ...fallback, ...item });
+  }
+
+  return [...merged.values()].sort((a, b) => String(a.label).localeCompare(String(b.label)));
 }
 
-module.exports = { ensureAssetDefinitions, extractMessageFile, archiveAssetFromMessage, sendAsset, getAssetsByGroup };
+module.exports = {
+  getAssetDefinition,
+  getAssetByKey,
+  extractMessageFile,
+  archiveAssetFromMessage,
+  sendAsset,
+  getAssetsByGroup,
+};

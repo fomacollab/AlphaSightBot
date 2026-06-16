@@ -23,15 +23,6 @@ async function ensureCache() {
   if (!loaded) await loadSettingsCache();
 }
 
-async function ensureDefaultSettings() {
-  const entries = Object.entries(DEFAULT_SETTINGS);
-  for (const [key, value] of entries) {
-    const exists = await Settings.findOne({ key }).lean();
-    if (!exists) await Settings.create({ key, value });
-  }
-  await loadSettingsCache();
-}
-
 async function getSetting(key) {
   await ensureCache();
   if (cache.has(key) || Object.prototype.hasOwnProperty.call(DEFAULT_SETTINGS, key)) {
@@ -62,7 +53,6 @@ async function setSetting(key, value) {
 }
 
 module.exports = {
-  ensureDefaultSettings,
   getSetting,
   getSettingsBatch,
   setSetting,

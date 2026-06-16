@@ -1,13 +1,11 @@
 const Admin = require('../models/Admin');
 const User = require('../models/User');
-const Template = require('../models/Template');
-const MediaAsset = require('../models/MediaAsset');
 const adminCache = require('../cache');
 const botState = require('../services/botState');
-const { archiveAssetFromMessage, getAssetsByGroup, extractMessageFile } = require('../services/archiveService');
+const { archiveAssetFromMessage, getAssetByKey, getAssetsByGroup, extractMessageFile } = require('../services/archiveService');
 const { getSetting, setSetting } = require('../services/settingsService');
 const { listKnownChannels, getKnownChannelById, formatKnownChannelLabel, findKnownChannelByLabel } = require('../services/channelRegistryService');
-const { listTemplates, setTemplate } = require('../services/templateService');
+const { listTemplates, getTemplateRecord, getTemplateRecordByLabel, setTemplate } = require('../services/templateService');
 const logger = require('../services/logger');
 const { adminMainKeyboard, adminContentKeyboard, adminMediaKeyboard, adminAdminsKeyboard, adminBackKeyboard, adminSelectionKeyboard } = require('../keyboards/admin');
 const { withMainMenu } = require('../keyboards/user');
@@ -54,7 +52,7 @@ function ensureSession(ctx) {
 }
 
 async function getTemplateByLabel(group, label) {
-  return Template.findOne({ group, label }).lean();
+  return getTemplateRecordByLabel(group, label);
 }
 
 function getSettingOptionByLabel(label) {
@@ -294,7 +292,7 @@ async function renderAdminPage(ctx, user, page) {
       return;
     }
     case 'template_edit': {
-      const selected = await Template.findOne({ key: page.key }).lean();
+      const selected = await getTemplateRecord(page.key);
       if (!selected) {
         await ctx.reply('That template could not be found.', adminBackKeyboard());
         return;
@@ -337,7 +335,7 @@ async function renderAdminPage(ctx, user, page) {
     case 'media_upload': {
       await rememberAdminSection(user?._id, ADMIN_SECTIONS.MEDIA);
       if (!(await ensureArchiveChannelConfigured(ctx))) return;
-      const asset = await MediaAsset.findOne({ key: page.assetKey }).lean();
+      const asset = await getAssetByKey(page.assetKey);
       if (!asset) {
         await ctx.reply('That media slot could not be found.', adminBackKeyboard());
         return;

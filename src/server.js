@@ -5,10 +5,7 @@ const Admin = require('./models/Admin');
 const adminCache = require('./cache');
 const botState = require('./services/botState');
 const bot = require('./bot');
-const { seedAdmins } = require('./seed');
-const { getSetting, ensureDefaultSettings } = require('./services/settingsService');
-const { ensureDefaultTemplates } = require('./services/templateService');
-const { ensureAssetDefinitions } = require('./services/archiveService');
+const { getSetting } = require('./services/settingsService');
 const { processNudges } = require('./services/nudgeService');
 const userKeyboards = require('./keyboards/user');
 const { ensureUser } = require('./services/userService');
@@ -32,10 +29,6 @@ app.use((err, _req, res, _next) => {
 async function boot() {
   try {
     await connectDB();
-    await seedAdmins();
-    await ensureDefaultSettings();
-    await ensureDefaultTemplates();
-    await ensureAssetDefinitions();
 
     const admins = await Admin.find().lean();
     adminCache.set(admins);

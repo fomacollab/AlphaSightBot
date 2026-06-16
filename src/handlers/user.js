@@ -12,11 +12,11 @@ function isEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
 }
 
-async function handleS7LookupFailure(bot, ctx, user, reason, err = null) {
+async function handleS7LookupFailure(bot, ctx, user, attemptedEmail, reason, err = null) {
   const meta = {
     userId: user.telegramId,
     username: user.username,
-    email: user.registrationEmail,
+    email: attemptedEmail,
     attempts: user.emailLookupAttempts,
     reason,
   };
@@ -277,7 +277,7 @@ module.exports = function userHandlers(bot) {
         attempts: user.emailLookupAttempts,
       });
       try {
-        const result = await findRegistrationByEmail(text);
+        const result = await findRegistrationByEmail(normalizedEmail);
         if (result.found) {
           user.registrationEmail = normalizedEmail;
           await user.save();
@@ -291,9 +291,9 @@ module.exports = function userHandlers(bot) {
           await flow.sendText(bot, ctx.chat.id, await getTemplate('s7_confirmed'));
           return flow.sendS8(bot, user, keyboards);
         }
-        return handleS7LookupFailure(bot, ctx, user, 'S7 registration lookup not found');
+        return handleS7LookupFailure(bot, ctx, user, normalizedEmail, 'S7 registration lookup not found');
       } catch (err) {
-        return handleS7LookupFailure(bot, ctx, user, `S7 API failure: ${err.message}`, err);
+        return handleS7LookupFailure(bot, ctx, user, normalizedEmail, `S7 API failure: ${err.message}`, err);
       }
     }
 
