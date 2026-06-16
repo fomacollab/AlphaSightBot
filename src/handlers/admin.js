@@ -8,7 +8,6 @@ const { listKnownChannels, getKnownChannelById, formatKnownChannelLabel, findKno
 const { listTemplates, getTemplateRecord, getTemplateRecordByLabel, setTemplate } = require('../services/templateService');
 const logger = require('../services/logger');
 const { adminMainKeyboard, adminContentKeyboard, adminMediaKeyboard, adminAdminsKeyboard, adminBackKeyboard, adminSelectionKeyboard } = require('../keyboards/admin');
-const { withMainMenu } = require('../keyboards/user');
 const { ADMIN_BUTTONS, SETTINGS_KEYS, ADMIN_SETTING_OPTIONS, DEFAULT_TEMPLATES, ASSET_DEFINITIONS } = require('../constants/app');
 const {
   ADMIN_SECTIONS,
@@ -182,6 +181,16 @@ function clonePage(page) {
 
 function samePage(a, b) {
   return JSON.stringify(a || null) === JSON.stringify(b || null);
+}
+
+function peekAdminPage(ctx) {
+  ensureSession(ctx);
+  if (!ctx.session.adminPageStack.length) return null;
+  return ctx.session.adminPageStack[ctx.session.adminPageStack.length - 1] || null;
+}
+
+function getGroupForAssetKey(assetKey) {
+  return ASSET_DEFINITIONS.find((item) => item.key === assetKey)?.group || null;
 }
 
 function setAdminCurrentPage(ctx, page, pushHistory = true) {
@@ -403,11 +412,6 @@ module.exports = function adminHandlers(bot) {
     if (!adminGuard(ctx)) return;
     const user = await User.findOne({ telegramId: ctx.from.id });
     await navigateToAdminPage(ctx, user, { kind: 'section', section: user?.adminSection || ADMIN_SECTIONS.HOME }, { pushHistory: false });
-  });
-
-  bot.hears(ADMIN_BUTTONS.USER_VIEW, async (ctx) => {
-    if (!adminGuard(ctx)) return;
-    await ctx.reply('User view restored.', withMainMenu());
   });
 
   bot.hears(ADMIN_BUTTONS.CONTENT, async (ctx) => {
@@ -722,8 +726,18 @@ module.exports = function adminHandlers(bot) {
           draft.replacingExisting ? `${asset.label} Updated✅` : `${asset.label} Uploaded✅`,
         );
         const user = await User.findOne({ telegramId: ctx.from.id });
-        const previousPage = popAdminPage(ctx);
-        await renderAdminPage(ctx, user, previousPage);
+        const group = getGroupForAssetKey(draft.assetKey);
+        if (group) {
+          const targetPage = { kind: 'media_pick', group };
+          if (samePage(peekAdminPage(ctx), targetPage)) {
+            ctx.session.adminPageStack.pop();
+          }
+          setAdminCurrentPage(ctx, targetPage, false);
+          await renderAdminPage(ctx, user, targetPage);
+        } else {
+          const previousPage = popAdminPage(ctx);
+          await renderAdminPage(ctx, user, previousPage);
+        }
       } catch (err) {
         logger.error('admin-upload', 'Media upload failed', {
           assetKey: draft.assetKey,
