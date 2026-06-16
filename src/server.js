@@ -26,6 +26,8 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
+app.listen(PORT, () => console.log(`HTTP server listening on port ${PORT}`));
+
 async function boot() {
   try {
     await connectDB();
@@ -37,8 +39,6 @@ async function boot() {
     const enabled = await getSetting(SETTINGS_KEYS.BOT_ENABLED);
     botState.set(enabled !== false);
     console.log(`Bot state: ${botState.get() ? 'enabled' : 'disabled'}`);
-
-    app.listen(PORT, () => console.log(`HTTP server listening on port ${PORT}`));
 
     const me = await bot.telegram.getMe();
     console.log(`Bot connected: @${me.username} (ID: ${me.id})`);
